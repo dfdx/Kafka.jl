@@ -5,12 +5,10 @@ Workflow:
 
     # create KafkaClient using one of constructors
     kc = KafkaClient(...)
-    # send requests
-    metadata(kc, ...)
-    produce(kc, ...)
-    fetch(kc, ...)
-    # pull results
-    take!(kc.results)
+    # send requests obtaining one-time channels with a response
+    channel = metadata(kc, ...)
+    # take the result
+    resp = take!(channel)
 
 """
 type KafkaClient
@@ -31,6 +29,14 @@ function KafkaClient(host::AbstractString, port::Int; resp_loop=true)
     return kc
 end
 
+function register_request{T}(kc::KafkaClient, ::Type{T})
+    kc.last_cor_id += 1
+    id = kc.last_cor_id
+    kc.inprogress[id] = T
+    kc.results[id] = Channel(1)
+    return id, kc.results[id]
+end
+
 function handle_response(kc::KafkaClient)
     eof(kc.sock) # stop until there's new data
     header = recv_header(kc.sock)
@@ -49,15 +55,8 @@ function handle_responses(kc::KafkaClient)
     end
 end
 
-function register_request{T}(kc::KafkaClient, ::Type{T})
-    kc.last_cor_id += 1
-    id = kc.last_cor_id
-    kc.inprogress[id] = T
-    kc.results[id] = Channel(1)
-    return id, kc.results[id]
-end
 
-# metadata
+## metadata
 
 function metadata{S<:AbstractString}(kc::KafkaClient, topics::Vector{S})
     cor_id, ch = register_request(kc, TopicMetadataResponse)    
@@ -67,7 +66,13 @@ function metadata{S<:AbstractString}(kc::KafkaClient, topics::Vector{S})
     return ch
 end
 
-# produce 
+function parse_response(resp::TopicMetadataResponse)
+    # just slightly modify output format for convenience
+    return Dict(:brokers => resp.brokers, :topics => resp.topic_metadata)
+end
+
+
+## produce 
 
 # using Message version 0
 function make_message(key::Vector{UInt8}, value::Vector{UInt8})
@@ -111,6 +116,9 @@ function produce(kc::KafkaClient, topic::AbstractString, partition_id::Integer,
     return ch
 end
 
+
+## fetch
+
 function make_fetch_request(topic::AbstractString, partition_id::Integer,
                             offset::Int64)
     partition = Int32(partition_id)
@@ -129,3 +137,22 @@ function Base.fetch(kc::KafkaClient, topic::AbstractString, partition_id::Intege
     send_request(kc.sock, header, req)
     return ch
 end
+
+function parse_response(resp::FetchResponse)
+    pr = resp.topic_results[1].partition_results[1]
+    if pr.error_code != 0
+        throw(ErrorException("FetchRequest failed with error code: " *
+                             "$(pr.error_code)"))
+    end
+    elements = pr.message_set.elements
+    results = [(elem.offset, elem.message.key, elem.message.value)
+               for elem in elements]
+    return results
+end
+
+# for testing, may be removed for consistency later
+function parse_response{K,V}(resp::FetchResponse, ::Type{K}, ::Type{V})
+    return [(offset, convert(K, key), convert(V, value))
+            for (offset, key, value) in parse_response(resp)]    
+end
+
