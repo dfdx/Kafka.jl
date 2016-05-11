@@ -63,12 +63,31 @@ function metadata{S<:AbstractString}(kc::KafkaClient, topics::Vector{S})
     header = RequestHeader(METADATA, 0, cor_id, DEFAULT_ID)
     req = TopicMetadataRequest(topics)
     send_request(kc.sock, header, req)
-    return ch
+    return map(parse_response, ch)
+end
+
+
+function parse_metadata(md::PartitionMetadata)
+    if md.partition_error_code != 0
+        throw(ErrorException("TopicMetadataRequest failed with error code " *
+                             "$(md.partition_error_code)"))
+    end
+    return Dict(md.partition_id =>
+                Dict(:leader => md.leader, :replicas => md.replicas, :isr => md.isr))
+end
+
+function parse_metadata(md::TopicMetadata)
+    if md.topic_error_code != 0
+        throw(ErrorException("TopicMetadataRequest failed with error code " *
+                             "$(md.topic_error_code)"))
+    end
+    partition_metadata_dict = merge(map(parse_metadata, md.partition_metadata)...)
+    return Dict(md.topic_name => partition_metadata_dict)
 end
 
 function parse_response(resp::TopicMetadataResponse)
-    # just slightly modify output format for convenience
-    return Dict(:brokers => resp.brokers, :topics => resp.topic_metadata)
+    topic_metadata_dict = merge(map(parse_metadata, resp.topic_metadata)...)
+    return Dict(:brokers => resp.brokers, :topics => topic_metadata_dict)
 end
 
 
@@ -135,7 +154,7 @@ function Base.fetch(kc::KafkaClient, topic::AbstractString, partition_id::Intege
     header = RequestHeader(FETCH, 0, cor_id, DEFAULT_ID)
     req = make_fetch_request(topic, partition, offset)
     send_request(kc.sock, header, req)
-    return ch
+    return map(parse_response, ch)    
 end
 
 function parse_response(resp::FetchResponse)

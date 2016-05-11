@@ -13,4 +13,4 @@ take!(ch::TransformedChannel) = ch.transform(take!(ch.original))
 
 # TODO: what other methods should be implemented? what methods should be forbidden?
 
-
+map(f::Function, ch::AbstractChannel) = TransformedChannel(ch, f)
