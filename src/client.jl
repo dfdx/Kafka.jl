@@ -12,7 +12,8 @@ Workflow:
 
 """
 type KafkaClient
-    sock::TCPSocket
+    brokers::Dict{Tuple(AbstractString, Int), TCPSocket}
+    metadata::Dict{Symbol,Any}
     last_cor_id::Int64
     inprogress::Dict{Int64, Type}
     results::Dict{Int64, Channel{Any}}
@@ -38,15 +39,22 @@ function register_request{T}(kc::KafkaClient, ::Type{T})
 end
 
 function handle_response(kc::KafkaClient)
-    eof(kc.sock) # stop until there's new data
-    header = recv_header(kc.sock)
-    cor_id = header.correlation_id
-    T = kc.inprogress[cor_id]
-    resp = readobj(kc.sock, T)    
-    put!(kc.results[cor_id], resp)
-    delete!(kc.inprogress, cor_id)
-    delete!(kc.results, cor_id) # if nobody listens to a channel,
-                                #  GC should delete it as well
+    try
+        header = recv_header(kc.sock)
+        cor_id = header.correlation_id
+        T = kc.inprogress[cor_id]
+        resp = readobj(kc.sock, T)
+        put!(kc.results[cor_id], resp)
+        delete!(kc.inprogress, cor_id)
+        delete!(kc.results, cor_id) # if nobody listens to a channel,
+                                    #  GC should delete it as well
+    catch e
+        if isa(e, EOFError)
+            # presumably, socket has been closed by remote and; reinitialize socket
+        else
+            throw(e)
+        end
+    end
 end
 
 function handle_responses(kc::KafkaClient)
@@ -58,14 +66,18 @@ end
 
 ## metadata
 
-function metadata{S<:AbstractString}(kc::KafkaClient, topics::Vector{S})
-    cor_id, ch = register_request(kc, TopicMetadataResponse)    
+function _metadata{S<:AbstractString}(kc::KafkaClient, topics::Vector{S})
+    cor_id, ch = register_request(kc, TopicMetadataResponse)
     header = RequestHeader(METADATA, 0, cor_id, DEFAULT_ID)
     req = TopicMetadataRequest(topics)
     send_request(kc.sock, header, req)
-    return map(parse_response, ch)
+    return 
 end
 
+function metadata{S<:AbstractString}(kc::KafkaClient, topics::Vector{S})
+    ch = _metadata(kc, topics)
+    return map(parse_response, ch)
+end
 
 function parse_metadata(md::PartitionMetadata)
     if md.partition_error_code != 0
@@ -73,7 +85,8 @@ function parse_metadata(md::PartitionMetadata)
                              "$(md.partition_error_code)"))
     end
     return Dict(md.partition_id =>
-                Dict(:leader => md.leader, :replicas => md.replicas, :isr => md.isr))
+                Dict(:leader => md.leader, :replicas => md.replicas,
+                     :isr => md.isr))
 end
 
 function parse_metadata(md::TopicMetadata)
@@ -91,7 +104,7 @@ function parse_response(resp::TopicMetadataResponse)
 end
 
 
-## produce 
+## produce
 
 # using Message version 0
 function make_message(key::Vector{UInt8}, value::Vector{UInt8})
@@ -147,14 +160,20 @@ function make_fetch_request(topic::AbstractString, partition_id::Integer,
     return req
 end
 
-function Base.fetch(kc::KafkaClient, topic::AbstractString, partition_id::Integer,
+function _fetch(kc::KafkaClient, topic::AbstractString, partition_id::Integer,
                offset::Int64)
     partition = Int32(partition_id)
     cor_id, ch = register_request(kc, FetchResponse)
     header = RequestHeader(FETCH, 0, cor_id, DEFAULT_ID)
     req = make_fetch_request(topic, partition, offset)
     send_request(kc.sock, header, req)
-    return map(parse_response, ch)    
+    return ch
+end
+
+function fetch(kc::KafkaClient, topic::AbstractString, partition::Integer,
+               offset::Int64)
+    ch = _fetch(kc, topic, partition, offset)
+    return map(parse_response, ch)
 end
 
 function parse_response(resp::FetchResponse)
@@ -169,9 +188,7 @@ function parse_response(resp::FetchResponse)
     return results
 end
 
-# for testing, may be removed for consistency later
 function parse_response{K,V}(resp::FetchResponse, ::Type{K}, ::Type{V})
     return [(offset, convert(K, key), convert(V, value))
-            for (offset, key, value) in parse_response(resp)]    
+            for (offset, key, value) in parse_response(resp)]
 end
-
