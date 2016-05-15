@@ -21,7 +21,7 @@ end
 
 function KafkaClient(host::AbstractString, port::Int; resp_loop=true)
     sock = connect(host, port)
-    meta = initial_metadata(sock, ASCIIString[])
+    meta = all_metadata(sock)
     brokers = [b.node_id => connect(b.host, b.port) for b in meta[:brokers]]
     inprogress = Dict{Int64, Type}()
     results = Dict{Int64, Channel{Any}}()

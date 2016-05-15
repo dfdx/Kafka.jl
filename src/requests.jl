@@ -1,11 +1,11 @@
 
 ## metadata
 
-function initial_metadata{S<:AbstractString}(sock::TCPSocket, topics::Vector{S})
+function all_metadata(sock::TCPSocket)
     header = RequestHeader(METADATA, 0, 0, DEFAULT_ID)
-    req = TopicMetadataRequest(topics)
+    req = AllTopicsMetadataRequest()
     send_request(sock, header, req)
-    header = recv_header(sock)       
+    header = recv_header(sock)
     resp = readobj(sock, TopicMetadataResponse)
     return parse_response(resp)
 end
@@ -21,6 +21,10 @@ end
 function metadata{S<:AbstractString}(kc::KafkaClient, topics::Vector{S})
     ch = _metadata(kc, topics)
     return map(parse_response, ch)
+end
+
+function metadata(kc::KafkaClient)
+    return all_metadata(kc.sock)
 end
 
 function parse_metadata(md::PartitionMetadata)
@@ -52,17 +56,15 @@ end
 
 # using Message version 0
 function make_message(key::Vector{UInt8}, value::Vector{UInt8})
-    magic_byte = Int8(1)  # current version of Kafka message binary format
+    magic_byte = Int8(0)
+    # magic_byte = Int8(1)  # current version of Kafka message binary format
     attributes = Int8(0)  # no compression
     buf = IOBuffer()
-    write(buf, magic_byte)
-    write(buf, attributes)
-    write(buf, key)
-    write(buf, value)
-    crc = Int64(crc32(buf.data))  # TODO: CRC is calculated differently in Kafka
-    if crc >= 2^31
-        crc -= 2^32
-    end
+    writeobj(buf, magic_byte)
+    writeobj(buf, attributes)
+    writeobj(buf, key)
+    writeobj(buf, value)
+    crc = reinterpret(Int32, crc32(buf.data))
     return Message(Int32(crc), magic_byte, attributes, key, value)
 end
 
@@ -88,7 +90,7 @@ function produce(kc::KafkaClient, topic::AbstractString, partition_id::Integer,
     cor_id, ch = register_request(kc, ProduceResponse)
     header = RequestHeader(PRODUCE, 0, cor_id, DEFAULT_ID)
     req = make_produce_request(topic, partition, kvs)
-    send_request(kc.sock, header, req)
+    send_request(find_leader(kc, topic, partition), header, req)
     return ch
 end
 
@@ -106,7 +108,7 @@ end
 
 function _fetch(kc::KafkaClient, topic::AbstractString,
                 prt_id::Integer, offset::Int64;
-                max_wait_time=1000, min_bytes=1024, max_bytes=1024*1024)
+                max_wait_time=100, min_bytes=1024, max_bytes=1024*1024)
     partition = Int32(prt_id)
     cor_id, ch = register_request(kc, FetchResponse)
     header = RequestHeader(FETCH, 0, cor_id, DEFAULT_ID)
@@ -118,7 +120,7 @@ end
 
 function fetch(kc::KafkaClient, topic::AbstractString,
                partition::Integer, offset::Int64;
-               max_wait_time=1000, min_bytes=1024, max_bytes=1024*1024,
+               max_wait_time=100, min_bytes=1024, max_bytes=1024*1024,
                key_type=Vector{UInt8}, value_type=Vector{UInt8})
     ch = _fetch(kc, topic, partition, offset; max_wait_time=max_wait_time,
                 min_bytes=min_bytes, max_bytes=max_bytes)

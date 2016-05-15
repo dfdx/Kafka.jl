@@ -5,7 +5,8 @@ writeobj(io::IO, n::Integer) = write(io, hton(n))
 readobj{T<:Integer}(io::IO, ::Type{T}) = ntoh(read(io, T))
 
 function writeobj(io::IO, s::ASCIIString)
-    writeobj(io, Int16(length(s)))
+    len = Int16(length(s))    
+    writeobj(io, len > 0 ? len : -1)
     write(io, s)
 end
 function readobj(io::IO, ::Type{ASCIIString})
@@ -13,17 +14,9 @@ function readobj(io::IO, ::Type{ASCIIString})
     return len > 0 ? bytestring(readbytes(io, len)) : ""
 end
 
-function writeobj(io::IO, bs::Vector{UInt8})
-    writeobj(io, Int32(length(bs)))
-    write(io, bs)
-end
-function readobj(io::IO, ::Type{Vector{UInt8}})
-    len = readobj(io, Int32)
-    return len > 0 ? readbytes(io, len) : UInt8[]
-end
-
 function writeobj{T}(io::IO, arr::Vector{T})
-    writeobj(io, Int32(length(arr)))
+    len = Int32(length(arr))
+    writeobj(io, len > 0 ? len : -1)
     for x in arr
         writeobj(io, x)
     end
@@ -84,12 +77,36 @@ function readobj{T}(io::IO, ::Type{T})
     return T(vals...)
 end
 
-# MessageSet and PartitionFetchResult
-# This is the most weird part of the protocol: MessageSet, being an array,
-# doesn't have normal Int32 prefix, so isn't self-containing. To read it
-# we need an additional parameter - message set size, contained only in
-# PartitionFetchResult. Note, that message set size is also Int32, but contains
-# number of bytes in message set instead of number of elements
+# Weird part: MessageSetElement, MessageSet and PartitionFetchResult
+# Unlike other data types, MessageSetElement and MessageSet can't
+# be encoded/decoded as a sum of its parts, but require special rules:
+# 
+# 1. MessageSetElement contains field message_size with actual size (in bytes)
+#    of encoded message. In most cases it is the same as if message were decoded
+#    normally. But in some specific cases (e.g. when value is null), message
+#    may contain additional bytes (for which I couldn't understand the meaning).
+#    So we need to read message_size bytes from a stream to a buffer and
+#    then parse actual message from that buffer.
+
+function readobj(io::IO, ::Type{MessageSetElement})
+    offset = readobj(io, Int64)
+    message_size = readobj(io, Int32)
+    data = readbytes(io, message_size)
+    buf = IOBuffer()
+    write(buf, data)
+    seek(buf, 0)
+    msg = readobj(buf, Message)
+    return MessageSetElement(offset, message_size, msg)
+end
+
+# 2. MessageSet is essentially an array of MessageSetElements, but unlike other
+#    arrays it doesn't contain Int32 prefix of length. Instead, its
+#    parent struct (during reading) - PartitionFetchResult - contains a field
+#    message_set_size. Just as with MessageSetElement, we need first to read
+#    that much bytes into a buffer and then deserialize all full instances of
+#    MessageSetElement. Note that data is copied from brokers as byte arrays
+#    so the resulting buffer may contain some partial messages which we dismiss
+
 function writeobj(io::IO, message_set::MessageSet)
     # skip array header
     for msg_elem in message_set.elements
@@ -103,8 +120,12 @@ function readobj(io::IO, ::Type{MessageSet}, message_set_size::Int32)
     seek(buf, 0)
     elements = MessageSetElement[]
     while !eof(buf)
-        elem = readobj(buf, MessageSetElement)
-        push!(elements, elem)
+        try
+            elem = readobj(buf, MessageSetElement)
+            push!(elements, elem)
+        catch EOFError
+            # incomplete message
+        end
     end
     return MessageSet(elements)
 end
@@ -119,6 +140,7 @@ function readobj(io::IO, ::Type{PartitionFetchResult})
     return PartitionFetchResult(partition, error_code, highwater_mark_offset,
                                 message_set_size, message_set)
 end
+
 
 
 

@@ -38,6 +38,17 @@ immutable TopicMetadataRequest
     topics::Vector{ASCIIString}
 end
 
+# to obtain metadata for all topics, we need to pass an empty array
+# however, Kafka mixes up empty arrays and nulls and rest of API
+# transforms Julia's T[] to null (i.e. array with lenght -1)
+# to overcome it in this specific case we use special request that 
+# emulates empty array (with length 0)
+immutable AllTopicsMetadataRequest
+    # RequestHeader omitted, write manuallyheader::RequestHeader
+    pseudo_length::Int32
+    AllTopicsMetadataRequest() = new(0)
+end
+
 immutable TopicMetadataResponse
     # ResponseHeader omitted, read manually
     brokers::Vector{Broker}
