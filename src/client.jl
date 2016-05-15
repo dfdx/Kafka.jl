@@ -21,7 +21,7 @@ end
 
 function KafkaClient(host::AbstractString, port::Int; resp_loop=true)
     sock = connect(host, port)
-    meta = all_metadata(sock)
+    meta = init_metadata(sock)
     brokers = [b.node_id => connect(b.host, b.port) for b in meta[:brokers]]
     inprogress = Dict{Int64, Type}()
     results = Dict{Int64, Channel{Any}}()
@@ -80,3 +80,7 @@ function handle_response(kc::KafkaClient, sock::TCPSocket)
                                 #  GC should delete it as well
 end
 
+
+function ensure_leader(kc::KafkaClient, topic::AbstractString, partition::Integer)
+    # TODO
+end

@@ -1,7 +1,7 @@
 
 ## metadata
 
-function all_metadata(sock::TCPSocket)
+function init_metadata(sock::TCPSocket)
     header = RequestHeader(METADATA, 0, 0, DEFAULT_ID)
     req = AllTopicsMetadataRequest()
     send_request(sock, header, req)
@@ -23,14 +23,28 @@ function metadata{S<:AbstractString}(kc::KafkaClient, topics::Vector{S})
     return map(parse_response, ch)
 end
 
-function metadata(kc::KafkaClient)
-    return all_metadata(kc.sock)
+function _metadata(kc::KafkaClient)
+    cor_id, ch = register_request(kc, TopicMetadataResponse)
+    header = RequestHeader(METADATA, 0, cor_id, DEFAULT_ID)
+    req = AllTopicsMetadataRequest()
+    send_request(random_broker(kc), header, req)
+    return ch
 end
+
+function metadata(kc::KafkaClient)
+    ch = _metadata(kc)
+    return map(parse_response, ch)
+end
+
+# TODO
+## function metadata(kc::KafkaClient)
+##     return all_metadata(random_broker(kc))
+## end
 
 function parse_metadata(md::PartitionMetadata)
     if md.partition_error_code != 0
-        throw(ErrorException("TopicMetadataRequest failed with error code " *
-                             "$(md.partition_error_code)"))
+        error("TopicMetadataRequest failed with error code " *
+              "$(md.partition_error_code)")
     end
     return Dict(md.partition_id =>
                 Dict(:leader => md.leader, :replicas => md.replicas,
@@ -39,8 +53,8 @@ end
 
 function parse_metadata(md::TopicMetadata)
     if md.topic_error_code != 0
-        throw(ErrorException("TopicMetadataRequest failed with error code " *
-                             "$(md.topic_error_code)"))
+        error("TopicMetadataRequest failed with error code " *
+              "$(md.topic_error_code)")
     end
     partition_metadata_dict = merge(map(parse_metadata, md.partition_metadata)...)
     return Dict(md.topic_name => partition_metadata_dict)
@@ -84,14 +98,28 @@ function make_produce_request(topic::AbstractString, partition_id::Integer,
     return req
 end
 
-function produce(kc::KafkaClient, topic::AbstractString, partition_id::Integer,
-                 kvs::Vector{Tuple{Vector{UInt8}, Vector{UInt8}}})
+function _produce(kc::KafkaClient, topic::AbstractString, partition_id::Integer,
+                  kvs::Vector{Tuple{Vector{UInt8}, Vector{UInt8}}})
     partition = Int32(partition_id)
     cor_id, ch = register_request(kc, ProduceResponse)
     header = RequestHeader(PRODUCE, 0, cor_id, DEFAULT_ID)
     req = make_produce_request(topic, partition, kvs)
     send_request(find_leader(kc, topic, partition), header, req)
     return ch
+end
+
+function produce(kc::KafkaClient, topic::AbstractString, partition_id::Integer,
+                 kvs::Vector{Tuple{Vector{UInt8}, Vector{UInt8}}})
+    ch = _produce(kc, topic, partition_id, kvs)
+    return map(parse_response, ch)
+end
+
+function parse_response(resp::ProduceResponse)    
+    partition, error_code, offset = resp.responses[1][2][1]
+    if error_code != 0
+        error("Produce request failed with error code: $error_code")
+    end
+    return offset
 end
 
 
@@ -130,8 +158,7 @@ end
 function parse_response(resp::FetchResponse)
     pr = resp.topic_results[1].partition_results[1]
     if pr.error_code != 0
-        throw(ErrorException("FetchRequest failed with error code: " *
-                             "$(pr.error_code)"))
+        error("FetchRequest failed with error code: $(pr.error_code)")
     end
     elements = pr.message_set.elements
     results = [(elem.offset, elem.message.key, elem.message.value)

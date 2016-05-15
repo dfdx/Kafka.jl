@@ -1,25 +1,3 @@
-# Kafka
-
-[![Build Status](https://travis-ci.org/dfdx/Kafka.jl.svg?branch=master)](https://travis-ci.org/dfdx/Kafka.jl)
-
-Client for Apache Kafka in Julia
-
-## Status
-
-Basically, Kafka provides 4 principal APIs:
-
- 1. Metadata retrieval 
- 2. Producing messages
- 3. Fetching messages
- 4. Offset management (a.k.a. consumer group management)
-
-First 3 are implemented and should be sufficient for most real-life use cases. The last one, however, is somewhat fast-moving target without single approach (e.g. Kafka 0.8.x uses Zookeeper to store offsets, 0.9.x provides broker API, while external systems like Apache Spark and Apache Storm use their own means to store offsets). Given instability and variety of options this part is postponed for now. Though, proposals on discussions are heavily welcome.
-
-## Usage example
-
-Copied from `examples/all.jl` (see the file for latest version):
-
-```
 
 # the following code assumes you have a Kafka broker running 127.0.0.1:9092
 # with topic "test" and one partition
@@ -72,4 +50,3 @@ offset_messages = take!(fetch(kc, "test", 0, start_offset, max_wait_time=5000))
 md_resp = take!(_metadata(kc, ["test"]))
 produce_resp = take!(_produce(kc, "test", 0, messages))
 fetch_resp = take!(_fetch(kc, "test", 0, start_offset))
-```
