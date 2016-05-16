@@ -73,7 +73,7 @@ immutable Message_v1
 end
 typealias Message Message_v0
 
-immutable MessageSetElement
+immutable OffsetMessage
     offset::Int64
     message_size::Int32
     message::Message
@@ -82,21 +82,21 @@ end
 # NOTE: MessageSet is serialized differently than other types,
 # see io.jl for details
 immutable MessageSet
-    elements::Vector{MessageSetElement}
+    elements::Vector{OffsetMessage}
 end
 
 
 # produce
 
-immutable PartitionData
+immutable ProduceRequestPartitionData
     partition::Int32
     message_set_size::Int32
     message_set::MessageSet
 end
 
-immutable TopicData
+immutable ProduceRequestTopicData
     topic_name::ASCIIString
-    partition_data::Vector{PartitionData}
+    partition_data::Vector{ProduceRequestPartitionData}
 end
 
 
@@ -104,7 +104,7 @@ immutable ProduceRequest
     # RequestHeader omitted, write manually
     required_acks::Int16
     timeout::Int32
-    topic_data::Vector{TopicData}
+    topic_data::Vector{ProduceRequestTopicData}
 end
 
 immutable ProduceResponse_v0
@@ -126,15 +126,15 @@ typealias ProduceResponse ProduceResponse_v0
 
 # fetch
 
-immutable PartitionFetch
+immutable FetchRequestPartitionData
     partition::Int32
     offset::Int64
     max_bytes::Int32
 end
 
-immutable TopicFetch
+immutable FetchRequestTopicData
     topic_name::ASCIIString
-    partition_fetches::Vector{PartitionFetch}
+    partition_fetches::Vector{FetchRequestPartitionData}
 end
 
 immutable FetchRequest
@@ -142,10 +142,10 @@ immutable FetchRequest
     replica_id::Int32 # should always be -1 for clients
     max_wait_time::Int32
     min_bytes::Int32
-    topic_fetches::Vector{TopicFetch}
+    topic_fetches::Vector{FetchRequestTopicData}
 end
 
-immutable PartitionFetchResult
+immutable FetchResponsePartitionData
     partition::Int32
     error_code::Int16
     highwater_mark_offset::Int64
@@ -153,20 +153,56 @@ immutable PartitionFetchResult
     message_set::MessageSet
 end
 
-immutable TopicFetchResult
+immutable FetchResponseTopicData
     topic_name::ASCIIString
-    partition_results::Vector{PartitionFetchResult}
+    partition_results::Vector{FetchResponsePartitionData}
 end
 
 immutable FetchResponse_v0
     # ResponseHeader omitted, read it manually
-    topic_results::Vector{TopicFetchResult}
+    topic_results::Vector{FetchResponseTopicData}
 end
 
 immutable FetchResponse_v1
     # ResponseHeader omitted, read it manually
     throttle_time::Int32
-    topic_results::Vector{TopicFetchResult}    
+    topic_results::Vector{FetchResponseTopicData}    
 end
 
 typealias FetchResponse FetchResponse_v0
+
+
+# offset listing
+
+immutable OffsetRequestPartitionData
+    partition::Int32
+    time::Int64
+    max_number_of_offsets::Int32
+end
+
+immutable OffsetRequestTopicData
+    topic_name::ASCIIString
+    partition_data::Vector{OffsetRequestPartitionData}
+end
+
+immutable OffsetRequest
+    replica_id::Int32
+    topic_data::Vector{OffsetRequestTopicData}    
+end
+
+
+immutable OffsetResponsePartitionData
+    partition::Int32
+    error_code::Int16
+    offsets::Vector{Int64}
+end
+
+immutable OffsetResponseTopicData
+    topic_name::ASCIIString
+    partition_data::Vector{OffsetResponsePartitionData}
+end
+
+immutable OffsetResponse
+    topic_data::Vector{OffsetResponseTopicData}
+end
+

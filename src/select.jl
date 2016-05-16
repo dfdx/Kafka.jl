@@ -1,4 +1,6 @@
 
+# this file is not used currently, left here just in case
+
 function select(sockets::Vector{TCPSocket}, readfn::Function;
                 sleep_time::Float64=0.1, channel_size::Int64=1024)
     result_channel = Channel(channel_size)
@@ -15,6 +17,7 @@ function select(sockets::Vector{TCPSocket}, readfn::Function;
     return result_channel
 end
 
+# test code for select()
 
 function echo_server()
     server = listen(8080)

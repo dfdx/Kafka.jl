@@ -86,12 +86,12 @@ function make_produce_request(topic::AbstractString, partition_id::Integer,
                               kvs::Vector{Tuple{Vector{UInt8}, Vector{UInt8}}})
     partition = Int32(partition_id)
     messages = [make_message(k, v) for (k, v) in kvs]
-    message_set_elems = [MessageSetElement(0, obj_size(msg), msg)
+    message_set_elems = [OffsetMessage(0, obj_size(msg), msg)
                          for msg in messages]
     message_set_size = reduce(+, map(obj_size, message_set_elems))
-    partition_data = PartitionData(partition, message_set_size,
+    partition_data = ProduceRequestPartitionData(partition, message_set_size,
                                    MessageSet(message_set_elems))
-    topic_data = TopicData(topic, [partition_data])
+    topic_data = ProduceRequestTopicData(topic, [partition_data])
     required_acks = 1 # broker will send response after writing to a local log
     timeout = 10_000  # in milliseconds
     req = ProduceRequest(required_acks, timeout, [topic_data])
@@ -128,8 +128,8 @@ end
 function make_fetch_request(topic::AbstractString, prt_id::Integer, offset::Int64,
                             max_wait_time::Int, min_bytes::Int, max_bytes::Int)
     partition = Int32(prt_id)
-    partition_fetch = PartitionFetch(partition, offset, max_bytes)
-    topic_fetch = TopicFetch(topic, [partition_fetch])
+    partition_fetch = FetchRequestPartitionData(partition, offset, max_bytes)
+    topic_fetch = FetchRequestTopicData(topic, [partition_fetch])
     req = FetchRequest(-1, max_wait_time, min_bytes, [topic_fetch])
     return req
 end
@@ -170,3 +170,7 @@ function parse_response{K,V}(resp::FetchResponse, ::Type{K}, ::Type{V})
     return [(offset, convert(K, key), convert(V, value))
             for (offset, key, value) in parse_response(resp)]
 end
+
+
+# offset listing
+

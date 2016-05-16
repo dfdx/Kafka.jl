@@ -77,18 +77,18 @@ function readobj{T}(io::IO, ::Type{T})
     return T(vals...)
 end
 
-# Weird part: MessageSetElement, MessageSet and PartitionFetchResult
-# Unlike other data types, MessageSetElement and MessageSet can't
+# Weird part: OffsetMessage, MessageSet and FetchResponsePartitionData
+# Unlike other data types, OffsetMessage and MessageSet can't
 # be encoded/decoded as a sum of its parts, but require special rules:
 # 
-# 1. MessageSetElement contains field message_size with actual size (in bytes)
+# 1. OffsetMessage contains field message_size with actual size (in bytes)
 #    of encoded message. In most cases it is the same as if message were decoded
 #    normally. But in some specific cases (e.g. when value is null), message
 #    may contain additional bytes (for which I couldn't understand the meaning).
 #    So we need to read message_size bytes from a stream to a buffer and
 #    then parse actual message from that buffer.
 
-function readobj(io::IO, ::Type{MessageSetElement})
+function readobj(io::IO, ::Type{OffsetMessage})
     offset = readobj(io, Int64)
     message_size = readobj(io, Int32)
     data = readbytes(io, message_size)
@@ -96,15 +96,15 @@ function readobj(io::IO, ::Type{MessageSetElement})
     write(buf, data)
     seek(buf, 0)
     msg = readobj(buf, Message)
-    return MessageSetElement(offset, message_size, msg)
+    return OffsetMessage(offset, message_size, msg)
 end
 
-# 2. MessageSet is essentially an array of MessageSetElements, but unlike other
+# 2. MessageSet is essentially an array of OffsetMessages, but unlike other
 #    arrays it doesn't contain Int32 prefix of length. Instead, its
-#    parent struct (during reading) - PartitionFetchResult - contains a field
-#    message_set_size. Just as with MessageSetElement, we need first to read
+#    parent struct (during reading) - FetchResponsePartitionData - contains a field
+#    message_set_size. Just as with OffsetMessage, we need first to read
 #    that much bytes into a buffer and then deserialize all full instances of
-#    MessageSetElement. Note that data is copied from brokers as byte arrays
+#    OffsetMessage. Note that data is copied from brokers as byte arrays
 #    so the resulting buffer may contain some partial messages which we dismiss
 
 function writeobj(io::IO, message_set::MessageSet)
@@ -118,10 +118,10 @@ function readobj(io::IO, ::Type{MessageSet}, message_set_size::Int32)
     buf = IOBuffer()
     write(buf, message_set_bytes)
     seek(buf, 0)
-    elements = MessageSetElement[]
+    elements = OffsetMessage[]
     while !eof(buf)
         try
-            elem = readobj(buf, MessageSetElement)
+            elem = readobj(buf, OffsetMessage)
             push!(elements, elem)
         catch EOFError
             # incomplete message
@@ -129,7 +129,7 @@ function readobj(io::IO, ::Type{MessageSet}, message_set_size::Int32)
     end
     return MessageSet(elements)
 end
-function readobj(io::IO, ::Type{PartitionFetchResult})
+function readobj(io::IO, ::Type{FetchResponsePartitionData})
     partition = readobj(io, Int32)
     error_code = readobj(io, Int16)
     highwater_mark_offset = readobj(io, Int64)
@@ -137,7 +137,7 @@ function readobj(io::IO, ::Type{PartitionFetchResult})
     # we don't know how many messeges there are, so reading that much bytes
     # and trying to parse as many messages as we can    
     message_set = readobj(io, MessageSet, message_set_size)
-    return PartitionFetchResult(partition, error_code, highwater_mark_offset,
+    return FetchResponsePartitionData(partition, error_code, highwater_mark_offset,
                                 message_set_size, message_set)
 end
 
