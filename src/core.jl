@@ -1,6 +1,6 @@
 
-import Base: fetch, produce, consume, map, put!, push!, take!, isopen, close
-import Base: select
+import Base: fetch, produce, consume
+import Base: map, put!, push!, take!, isopen, close
 
 include("constants.jl")
 include("crc32.jl")

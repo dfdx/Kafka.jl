@@ -2,11 +2,15 @@ module Kafka
 
 export KafkaClient,
        metadata,
-       _metadata,
        produce,
-       _produce,
        fetch,
-       _fetch
+       list_offsets,
+       _metadata,
+       _produce,
+       _fetch,
+       _list_offsets,
+       earliest_offset,
+       latest_offset
 
 include("core.jl")
 

@@ -7,7 +7,7 @@ function init_metadata(sock::TCPSocket)
     send_request(sock, header, req)
     header = recv_header(sock)
     resp = readobj(sock, TopicMetadataResponse)
-    return parse_response(resp)
+    return process_response(resp)
 end
 
 function _metadata{S<:AbstractString}(kc::KafkaClient, topics::Vector{S})
@@ -20,7 +20,7 @@ end
 
 function metadata{S<:AbstractString}(kc::KafkaClient, topics::Vector{S})
     ch = _metadata(kc, topics)
-    return map(parse_response, ch)
+    return map(process_response, ch)
 end
 
 function _metadata(kc::KafkaClient)
@@ -33,13 +33,8 @@ end
 
 function metadata(kc::KafkaClient)
     ch = _metadata(kc)
-    return map(parse_response, ch)
+    return map(process_response, ch)
 end
-
-# TODO
-## function metadata(kc::KafkaClient)
-##     return all_metadata(random_broker(kc))
-## end
 
 function parse_metadata(md::PartitionMetadata)
     if md.partition_error_code != 0
@@ -60,7 +55,7 @@ function parse_metadata(md::TopicMetadata)
     return Dict(md.topic_name => partition_metadata_dict)
 end
 
-function parse_response(resp::TopicMetadataResponse)
+function process_response(resp::TopicMetadataResponse)
     topic_metadata_dict = merge(map(parse_metadata, resp.topic_metadata)...)
     return Dict(:brokers => resp.brokers, :topics => topic_metadata_dict)
 end
@@ -98,26 +93,27 @@ function make_produce_request(topic::AbstractString, partition_id::Integer,
     return req
 end
 
-function _produce(kc::KafkaClient, topic::AbstractString, partition_id::Integer,
-                  kvs::Vector{Tuple{Vector{UInt8}, Vector{UInt8}}})
-    partition = Int32(partition_id)
+function _produce(kc::KafkaClient, topic::AbstractString, partition::Integer,
+                  kvs::Vector{Tuple{Vector{UInt8}, Vector{UInt8}}})    
+    pid = Int32(partition)
     cor_id, ch = register_request(kc, ProduceResponse)
     header = RequestHeader(PRODUCE, 0, cor_id, DEFAULT_ID)
-    req = make_produce_request(topic, partition, kvs)
-    send_request(find_leader(kc, topic, partition), header, req)
+    req = make_produce_request(topic, pid, kvs)
+    send_request(find_leader(kc, topic, pid), header, req)
     return ch
 end
 
-function produce(kc::KafkaClient, topic::AbstractString, partition_id::Integer,
+function produce(kc::KafkaClient, topic::AbstractString, partition::Integer,
                  kvs::Vector{Tuple{Vector{UInt8}, Vector{UInt8}}})
-    ch = _produce(kc, topic, partition_id, kvs)
-    return map(parse_response, ch)
+    ensure_leader(kc, topic, partition)
+    ch = _produce(kc, topic, partition, kvs)
+    return map(process_response, ch)
 end
 
-function parse_response(resp::ProduceResponse)    
+function process_response(resp::ProduceResponse)    
     partition, error_code, offset = resp.responses[1][2][1]
     if error_code != 0
-        error("Produce request failed with error code: $error_code")
+        error("ProduceRequest failed with error code: $error_code")
     end
     return offset
 end
@@ -150,12 +146,13 @@ function fetch(kc::KafkaClient, topic::AbstractString,
                partition::Integer, offset::Int64;
                max_wait_time=100, min_bytes=1024, max_bytes=1024*1024,
                key_type=Vector{UInt8}, value_type=Vector{UInt8})
+    ensure_leader(kc, topic, partition)
     ch = _fetch(kc, topic, partition, offset; max_wait_time=max_wait_time,
                 min_bytes=min_bytes, max_bytes=max_bytes)
-    return map(r -> parse_response(r, key_type, value_type), ch)
+    return map(r -> process_response(r, key_type, value_type), ch)
 end
 
-function parse_response(resp::FetchResponse)
+function process_response(resp::FetchResponse)
     pr = resp.topic_results[1].partition_results[1]
     if pr.error_code != 0
         error("FetchRequest failed with error code: $(pr.error_code)")
@@ -166,11 +163,63 @@ function parse_response(resp::FetchResponse)
     return results
 end
 
-function parse_response{K,V}(resp::FetchResponse, ::Type{K}, ::Type{V})
+function process_response{K,V}(resp::FetchResponse, ::Type{K}, ::Type{V})
     return [(offset, convert(K, key), convert(V, value))
-            for (offset, key, value) in parse_response(resp)]
+            for (offset, key, value) in process_response(resp)]
 end
 
 
 # offset listing
 
+function make_offset_request(replica_id::Int32,
+                             topic::AbstractString, partition::Int32,
+                             time::Int64, max_number_of_offsets::Int64)
+    partition_data = OffsetRequestPartitionData(partition, time,
+                                                max_number_of_offsets)
+    topic_data = OffsetRequestTopicData(topic, [partition_data])
+    req = OffsetRequest(replica_id, [topic_data])
+    return req    
+end
+
+
+function _list_offsets(kc::KafkaClient, topic::AbstractString, partition::Integer,
+                       time::Int64, max_number_of_offsets::Int64)
+    pid = Int32(partition)
+    cor_id, ch = register_request(kc, OffsetResponse)
+    header = RequestHeader(OFFSETS, 0, cor_id, DEFAULT_ID)
+    req = make_offset_request(find_leader_id(kc, topic, partition),
+                              topic, pid, time, max_number_of_offsets)
+    send_request(find_leader(kc, topic, partition), header, req)
+    return ch
+end
+
+
+function list_offsets(kc::KafkaClient, topic::AbstractString, partition::Integer,
+                      time::Int64, max_number_of_offsets::Int64)
+    ensure_leader(kc, topic, partition)
+    ch = _list_offsets(kc, topic, partition, time, max_number_of_offsets)
+    return map(process_response, ch)
+end
+
+
+function earliest_offset(kc::KafkaClient,
+                         topic::AbstractString, partition::Integer)
+    ch = list_offsets(kc, topic, partition, -2, 1)
+    return map(offsets -> offsets[1], ch)
+end
+
+
+function latest_offset(kc::KafkaClient,
+                       topic::AbstractString, partition::Integer)
+    ch = list_offsets(kc, topic, partition, -1, 1)
+    return map(offsets -> offsets[1], ch)
+end
+
+
+function process_response(resp::OffsetResponse)
+    pd = resp.topic_data[1].partition_data[1]
+    if pd.error_code != 0
+        error("OffsetRequest failed with error code: $(pd.error_code)")
+    end
+    return pd.offsets
+end

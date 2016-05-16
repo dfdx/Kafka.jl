@@ -19,6 +19,17 @@ take!(metadata(kc, ["test"]))
 # if you don't pass any topics, metadata for all of them will be returned
 take!(metadata(kc))
 
+# get earliest and latest available offsets for topic "test" and partition 0
+take!(earliest_offset(kc, "test", 0))
+take!(latest_offset(kc, "test", 0))
+# or list offsets before particular time
+# WARNING: this method follows the protocol, but I couldn't make it working
+#          please, report if you can or see an error in usage!
+now = floor(Int64, time())
+max_number_of_offsets = 100
+take!(list_offsets(kc, "test", 0, now, max_number_of_offsets))
+
+
 # produce new messages
 # each message is a key-value pair where both key and value are byte arrays
 keys = [convert(Vector{UInt8}, key) for key in ["1", "2", "3"]]
@@ -47,6 +58,6 @@ offset_messages = take!(fetch(kc, "test", 0, start_offset, max_wait_time=5000))
 
 # Kafka.jl tries to make convenient wrapper around Kafka protocol,
 # but you can always get access to raw responses using methods with "_" prefix
-md_resp = take!(_metadata(kc, ["test"]))
+# for example:
 produce_resp = take!(_produce(kc, "test", 0, messages))
 fetch_resp = take!(_fetch(kc, "test", 0, start_offset))

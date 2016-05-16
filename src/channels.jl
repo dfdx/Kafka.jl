@@ -1,5 +1,5 @@
 
-type TransformedChannel
+type TransformedChannel <: AbstractChannel
     original::AbstractChannel
     transform::Function
 end

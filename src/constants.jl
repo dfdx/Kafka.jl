@@ -38,11 +38,7 @@ const PRODUCE = 0
 const FETCH = 1
 const OFFSETS = 2
 const METADATA = 3
-const LEADER_AND_ISR = 4
 
 
 # Kafka.jl specific
 const DEFAULT_ID = "kafka-jl"
-## const MIN_BYTES = 1024
-## const MAX_BYTES = 1024*1024
-## const MAX_WAIT_TIME = 5_000

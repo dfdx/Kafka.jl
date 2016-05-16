@@ -57,6 +57,11 @@ function register_request{T}(kc::KafkaClient, ::Type{T})
 end
 
 
+function find_leader_id(kc::KafkaClient, topic::AbstractString, partition::Integer)
+    node_id = kc.meta[:topics][topic][partition][:leader]
+    return node_id
+end
+
 function find_leader(kc::KafkaClient, topic::AbstractString, partition::Integer)
     node_id = kc.meta[:topics][topic][partition][:leader]
     return kc.brokers[node_id]
@@ -81,6 +86,16 @@ function handle_response(kc::KafkaClient, sock::TCPSocket)
 end
 
 
+"""
+Ensure that KafkaClient has open connection to the leader for these
+topic and partition. Reconnect if previous socket has been closed
+"""
 function ensure_leader(kc::KafkaClient, topic::AbstractString, partition::Integer)
-    # TODO
+    node_id = find_leader_id(kc, topic, partition)
+    if !isopen(kc.brokers[node_id])
+        idx = find(b -> b.node_id == node_id, kc.meta[:brokers])[1]
+        host = kc.meta[:brokers][idx].host
+        port = kc.meta[:brokers][idx].port
+        kc.brokers[node_id] = connect(host, port)
+    end
 end
