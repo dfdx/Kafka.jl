@@ -1,8 +1,6 @@
 using Kafka
 using Base.Test
 
-include("../src/core.jl")
-
 io = IOBuffer()
 
 writeobj(io, "test")
