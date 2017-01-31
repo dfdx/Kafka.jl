@@ -56,7 +56,11 @@ function parse_metadata(md::TopicMetadata)
 end
 
 function process_response(resp::TopicMetadataResponse)
-    topic_metadata_dict = merge(map(parse_metadata, resp.topic_metadata)...)
+    if !isempty(resp.topic_metadata)
+        topic_metadata_dict = merge(map(parse_metadata, resp.topic_metadata)...)
+    else
+        topic_metadata_dict = Dict{Symbol,Any}()
+    end
     return Dict(:brokers => resp.brokers, :topics => topic_metadata_dict)
 end
 

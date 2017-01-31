@@ -6,7 +6,7 @@ immutable RequestHeader
     api_key::Int16
     api_version::Int16
     correlation_id::Int32
-    client_id::ASCIIString
+    client_id::String
 end
 
 immutable ResponseHeader
@@ -15,7 +15,7 @@ end
 
 immutable Broker
     node_id::Int32
-    host::ASCIIString
+    host::String
     port::Int32
 end
 
@@ -29,13 +29,13 @@ end
 
 immutable TopicMetadata
     topic_error_code::Int16
-    topic_name::ASCIIString
+    topic_name::String
     partition_metadata::Vector{PartitionMetadata}
 end
 
 immutable TopicMetadataRequest
     # RequestHeader omitted, write manuallyheader::RequestHeader
-    topics::Vector{ASCIIString}
+    topics::Vector{String}
 end
 
 # to obtain metadata for all topics, we need to pass an empty array
@@ -95,7 +95,7 @@ immutable ProduceRequestPartitionData
 end
 
 immutable ProduceRequestTopicData
-    topic_name::ASCIIString
+    topic_name::String
     partition_data::Vector{ProduceRequestPartitionData}
 end
 
@@ -110,16 +110,16 @@ end
 immutable ProduceResponse_v0
     # ResponseHeader omitted, read it manually
     # responses format: [TopicName [Partition ErrorCode Offset]]
-    responses::Vector{Tuple{ASCIIString, Vector{Tuple{Int32,Int16,Int64}}}}
+    responses::Vector{Tuple{String, Vector{Tuple{Int32,Int16,Int64}}}}
 end
 immutable ProduceResponse_v1 # (supported in 0.9.0 or later)
     # ResponseHeader omitted, read it manually
-    responses::Vector{Tuple{ASCIIString, Vector{Tuple{Int32,Int16,Int64}}}}
+    responses::Vector{Tuple{String, Vector{Tuple{Int32,Int16,Int64}}}}
     throttle_time::Int32
 end
 immutable ProduceResponse_v2 # (supported in 0.10.0 or later)
     # ResponseHeader omitted, read it manually
-    responses::Vector{Tuple{ASCIIString, Vector{Tuple{Int32,Int16,Int64,Int64}}}}
+    responses::Vector{Tuple{String, Vector{Tuple{Int32,Int16,Int64,Int64}}}}
     throttle_time::Int32
 end
 typealias ProduceResponse ProduceResponse_v0
@@ -133,7 +133,7 @@ immutable FetchRequestPartitionData
 end
 
 immutable FetchRequestTopicData
-    topic_name::ASCIIString
+    topic_name::String
     partition_fetches::Vector{FetchRequestPartitionData}
 end
 
@@ -154,7 +154,7 @@ immutable FetchResponsePartitionData
 end
 
 immutable FetchResponseTopicData
-    topic_name::ASCIIString
+    topic_name::String
     partition_results::Vector{FetchResponsePartitionData}
 end
 
@@ -181,7 +181,7 @@ immutable OffsetRequestPartitionData
 end
 
 immutable OffsetRequestTopicData
-    topic_name::ASCIIString
+    topic_name::String
     partition_data::Vector{OffsetRequestPartitionData}
 end
 
@@ -198,7 +198,7 @@ immutable OffsetResponsePartitionData
 end
 
 immutable OffsetResponseTopicData
-    topic_name::ASCIIString
+    topic_name::String
     partition_data::Vector{OffsetResponsePartitionData}
 end
 

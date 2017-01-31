@@ -4,14 +4,14 @@
 writeobj(io::IO, n::Integer) = write(io, hton(n))
 readobj{T<:Integer}(io::IO, ::Type{T}) = ntoh(read(io, T))
 
-function writeobj(io::IO, s::ASCIIString)
+function writeobj(io::IO, s::String)
     len = Int16(length(s))    
     writeobj(io, len > 0 ? len : -1)
     write(io, s)
 end
-function readobj(io::IO, ::Type{ASCIIString})
+function readobj(io::IO, ::Type{String})
     len = readobj(io, Int16)
-    return len > 0 ? bytestring(readbytes(io, len)) : ""
+    return len > 0 ? String(read(io, len)) : ""
 end
 
 function writeobj{T}(io::IO, arr::Vector{T})
@@ -91,7 +91,7 @@ end
 function readobj(io::IO, ::Type{OffsetMessage})
     offset = readobj(io, Int64)
     message_size = readobj(io, Int32)
-    data = readbytes(io, message_size)
+    data = read(io, message_size)
     buf = IOBuffer()
     write(buf, data)
     seek(buf, 0)
@@ -114,7 +114,7 @@ function writeobj(io::IO, message_set::MessageSet)
     end
 end
 function readobj(io::IO, ::Type{MessageSet}, message_set_size::Int32)
-    message_set_bytes = readbytes(io, message_set_size)
+    message_set_bytes = read(io, message_set_size)
     buf = IOBuffer()
     write(buf, message_set_bytes)
     seek(buf, 0)
