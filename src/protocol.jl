@@ -6,7 +6,7 @@ immutable RequestHeader
     api_key::Int16
     api_version::Int16
     correlation_id::Int32
-    client_id::String
+    client_id::AbstractString
 end
 
 immutable ResponseHeader
@@ -15,7 +15,7 @@ end
 
 immutable Broker
     node_id::Int32
-    host::String
+    host::AbstractString
     port::Int32
 end
 
@@ -29,19 +29,19 @@ end
 
 immutable TopicMetadata
     topic_error_code::Int16
-    topic_name::String
+    topic_name::AbstractString
     partition_metadata::Vector{PartitionMetadata}
 end
 
 immutable TopicMetadataRequest
     # RequestHeader omitted, write manuallyheader::RequestHeader
-    topics::Vector{String}
+    topics::Vector{AbstractString}
 end
 
 # to obtain metadata for all topics, we need to pass an empty array
 # however, Kafka mixes up empty arrays and nulls and rest of API
 # transforms Julia's T[] to null (i.e. array with lenght -1)
-# to overcome it in this specific case we use special request that 
+# to overcome it in this specific case we use special request that
 # emulates empty array (with length 0)
 immutable AllTopicsMetadataRequest
     # RequestHeader omitted, write manuallyheader::RequestHeader
@@ -71,7 +71,7 @@ immutable Message_v1
     key::Vector{UInt8}
     value::Vector{UInt8}
 end
-typealias Message Message_v0
+const Message = Message_v0
 
 immutable OffsetMessage
     offset::Int64
@@ -95,7 +95,7 @@ immutable ProduceRequestPartitionData
 end
 
 immutable ProduceRequestTopicData
-    topic_name::String
+    topic_name::AbstractString
     partition_data::Vector{ProduceRequestPartitionData}
 end
 
@@ -110,19 +110,19 @@ end
 immutable ProduceResponse_v0
     # ResponseHeader omitted, read it manually
     # responses format: [TopicName [Partition ErrorCode Offset]]
-    responses::Vector{Tuple{String, Vector{Tuple{Int32,Int16,Int64}}}}
+    responses::Vector{Tuple{AbstractString, Vector{Tuple{Int32,Int16,Int64}}}}
 end
 immutable ProduceResponse_v1 # (supported in 0.9.0 or later)
     # ResponseHeader omitted, read it manually
-    responses::Vector{Tuple{String, Vector{Tuple{Int32,Int16,Int64}}}}
+    responses::Vector{Tuple{AbstractString, Vector{Tuple{Int32,Int16,Int64}}}}
     throttle_time::Int32
 end
 immutable ProduceResponse_v2 # (supported in 0.10.0 or later)
     # ResponseHeader omitted, read it manually
-    responses::Vector{Tuple{String, Vector{Tuple{Int32,Int16,Int64,Int64}}}}
+    responses::Vector{Tuple{AbstractString, Vector{Tuple{Int32,Int16,Int64,Int64}}}}
     throttle_time::Int32
 end
-typealias ProduceResponse ProduceResponse_v0
+const ProduceResponse = ProduceResponse_v0
 
 # fetch
 
@@ -133,7 +133,7 @@ immutable FetchRequestPartitionData
 end
 
 immutable FetchRequestTopicData
-    topic_name::String
+    topic_name::AbstractString
     partition_fetches::Vector{FetchRequestPartitionData}
 end
 
@@ -154,7 +154,7 @@ immutable FetchResponsePartitionData
 end
 
 immutable FetchResponseTopicData
-    topic_name::String
+    topic_name::AbstractString
     partition_results::Vector{FetchResponsePartitionData}
 end
 
@@ -166,10 +166,10 @@ end
 immutable FetchResponse_v1
     # ResponseHeader omitted, read it manually
     throttle_time::Int32
-    topic_results::Vector{FetchResponseTopicData}    
+    topic_results::Vector{FetchResponseTopicData}
 end
 
-typealias FetchResponse FetchResponse_v0
+const FetchResponse = FetchResponse_v0
 
 
 # offset listing
@@ -181,13 +181,13 @@ immutable OffsetRequestPartitionData
 end
 
 immutable OffsetRequestTopicData
-    topic_name::String
+    topic_name::AbstractString
     partition_data::Vector{OffsetRequestPartitionData}
 end
 
 immutable OffsetRequest
     replica_id::Int32
-    topic_data::Vector{OffsetRequestTopicData}    
+    topic_data::Vector{OffsetRequestTopicData}
 end
 
 
@@ -198,11 +198,10 @@ immutable OffsetResponsePartitionData
 end
 
 immutable OffsetResponseTopicData
-    topic_name::String
+    topic_name::AbstractString
     partition_data::Vector{OffsetResponsePartitionData}
 end
 
 immutable OffsetResponse
     topic_data::Vector{OffsetResponseTopicData}
 end
-

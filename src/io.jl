@@ -5,13 +5,16 @@ writeobj(io::IO, n::Integer) = write(io, hton(n))
 readobj{T<:Integer}(io::IO, ::Type{T}) = ntoh(read(io, T))
 
 function writeobj(io::IO, s::String)
-    len = Int16(length(s))    
+    len = Int16(length(s))
     writeobj(io, len > 0 ? len : -1)
     write(io, s)
 end
 function readobj(io::IO, ::Type{String})
     len = readobj(io, Int16)
-    return len > 0 ? String(read(io, len)) : ""
+    # Fix - sure hope everything is convertible (i.e. not 0x00).
+    byteVec = Vector{UInt8}(len)
+    byteslen = readbytes!(io, byteVec, len)
+    return len > 0 ? String(byteVec[1:byteslen]) : ""
 end
 
 function writeobj{T}(io::IO, arr::Vector{T})
@@ -26,7 +29,7 @@ function readobj{T}(io::IO, ::Type{Vector{T}})
     if len <= 0
         return T[]
     end
-    arr = Array(T, len)
+    arr = Array{T}(Int(len))
     for i=1:len
         arr[i] = readobj(io, T)
     end
@@ -80,7 +83,7 @@ end
 # Weird part: OffsetMessage, MessageSet and FetchResponsePartitionData
 # Unlike other data types, OffsetMessage and MessageSet can't
 # be encoded/decoded as a sum of its parts, but require special rules:
-# 
+#
 # 1. OffsetMessage contains field message_size with actual size (in bytes)
 #    of encoded message. In most cases it is the same as if message were decoded
 #    normally. But in some specific cases (e.g. when value is null), message
@@ -91,7 +94,7 @@ end
 function readobj(io::IO, ::Type{OffsetMessage})
     offset = readobj(io, Int64)
     message_size = readobj(io, Int32)
-    data = read(io, message_size)
+    data = readbytes(io, message_size)
     buf = IOBuffer()
     write(buf, data)
     seek(buf, 0)
@@ -114,7 +117,7 @@ function writeobj(io::IO, message_set::MessageSet)
     end
 end
 function readobj(io::IO, ::Type{MessageSet}, message_set_size::Int32)
-    message_set_bytes = read(io, message_set_size)
+    message_set_bytes = readbytes(io, message_set_size)
     buf = IOBuffer()
     write(buf, message_set_bytes)
     seek(buf, 0)
@@ -135,7 +138,7 @@ function readobj(io::IO, ::Type{FetchResponsePartitionData})
     highwater_mark_offset = readobj(io, Int64)
     message_set_size = readobj(io, Int32)
     # we don't know how many messeges there are, so reading that much bytes
-    # and trying to parse as many messages as we can    
+    # and trying to parse as many messages as we can
     message_set = readobj(io, MessageSet, message_set_size)
     return FetchResponsePartitionData(partition, error_code, highwater_mark_offset,
                                 message_set_size, message_set)
