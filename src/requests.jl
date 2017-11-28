@@ -77,7 +77,7 @@ function make_message(key::Vector{UInt8}, value::Vector{UInt8})
     writeobj(buf, attributes)
     writeobj(buf, key)
     writeobj(buf, value)
-    crc = reinterpret(Int32, crc32(buf.data))
+    crc = reinterpret(Int32, crc32(take!(buf)))
     return Message(Int32(crc), magic_byte, attributes, key, value)
 end
 
@@ -98,7 +98,7 @@ function make_produce_request(topic::AbstractString, partition_id::Integer,
 end
 
 function _produce(kc::KafkaClient, topic::AbstractString, partition::Integer,
-                  kvs::Vector{Tuple{Vector{UInt8}, Vector{UInt8}}})    
+                  kvs::Vector{Tuple{Vector{UInt8}, Vector{UInt8}}})
     pid = Int32(partition)
     cor_id, ch = register_request(kc, ProduceResponse)
     header = RequestHeader(PRODUCE, 0, cor_id, DEFAULT_ID)
@@ -114,7 +114,7 @@ function produce(kc::KafkaClient, topic::AbstractString, partition::Integer,
     return map(process_response, ch)
 end
 
-function process_response(resp::ProduceResponse)    
+function process_response(resp::ProduceResponse)
     partition, error_code, offset = resp.responses[1][2][1]
     if error_code != 0
         error("ProduceRequest failed with error code: $error_code")
@@ -173,7 +173,7 @@ function process_response{K,V}(resp::FetchResponse, ::Type{K}, ::Type{V})
 end
 
 
-# offset listing
+## offset listing
 
 function make_offset_request(replica_id::Int32,
                              topic::AbstractString, partition::Int32,
@@ -182,7 +182,7 @@ function make_offset_request(replica_id::Int32,
                                                 max_number_of_offsets)
     topic_data = OffsetRequestTopicData(topic, [partition_data])
     req = OffsetRequest(replica_id, [topic_data])
-    return req    
+    return req
 end
 
 
@@ -226,4 +226,16 @@ function process_response(resp::OffsetResponse)
         error("OffsetRequest failed with error code: $(pd.error_code)")
     end
     return pd.offsets
+end
+
+
+## API versions
+
+function api_versions(kc::KafkaClient)
+    sock = random_broker(kc)
+    cor_id, ch = register_request(kc, ApiVersionsResponse)
+    header = RequestHeader(API_VERSIONS, 1, cor_id, DEFAULT_ID)
+    send_request(sock, header)
+    resp = take!(ch)
+    return resp.api_versions
 end

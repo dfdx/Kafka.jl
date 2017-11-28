@@ -26,7 +26,7 @@ function readobj{T}(io::IO, ::Type{Vector{T}})
     if len <= 0
         return T[]
     end
-    arr = Array(T, len)
+    arr = Array{T}(len)
     for i=1:len
         arr[i] = readobj(io, T)
     end
@@ -70,7 +70,7 @@ function writeobj(io::IO, o)
     end
 end
 function readobj{T}(io::IO, ::Type{T})
-    vals = Array(Any, length(T.types))
+    vals = Array{Any}(length(T.types))
     for (i, t) in enumerate(T.types)
         vals[i] = readobj(io, t)
     end
@@ -147,12 +147,15 @@ end
 
 # requests and responses
 
+
+# TODO: server waits for some more bytes
+#       one possible reason is that the length of objects is calculated incorrectly
 function obj_size(objs...)
     buf = IOBuffer()
     for obj in objs
         writeobj(buf, obj)
     end
-    return Int32(length(buf.data))
+    return Int32(buf.size)
 end
 
 function send_request(io::IO, header::RequestHeader, req)
@@ -160,6 +163,11 @@ function send_request(io::IO, header::RequestHeader, req)
     writeobj(io, len)
     writeobj(io, header)
     writeobj(io, req)
+end
+function send_request(io::IO, header::RequestHeader)
+    len = obj_size(header)
+    writeobj(io, len)
+    writeobj(io, header)
 end
 function recv_header(io::IO)
     readobj(io, Int32) # length, do we really need it?
