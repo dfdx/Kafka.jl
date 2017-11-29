@@ -38,7 +38,7 @@ const PRODUCE = 0
 const FETCH = 1
 const OFFSETS = 2
 const METADATA = 3
-
+const API_VERSIONS = 18
 
 # Kafka.jl specific
 const DEFAULT_ID = "kafka-jl"

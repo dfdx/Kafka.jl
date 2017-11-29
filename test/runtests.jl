@@ -1,4 +1,5 @@
 using Kafka
+import Kafka: writeobj, readobj
 using Base.Test
 
 io = IOBuffer()
@@ -10,9 +11,11 @@ writeobj(io, ["hello", "world"])
 
 seek(io, 0)
 
-@test readobj(io, ASCIIString) == "test"
+@test readobj(io, String) == "test"
 @test readobj(io, Int64) == 42
 @test readobj(io, Vector{UInt8}) == UInt8[1, 2, 3]
-@test readobj(io, Vector{ASCIIString}) == ["hello", "world"]
+@test readobj(io, Vector{String}) == ["hello", "world"]
+
+include("integration.jl")
 
 println("Ok.")

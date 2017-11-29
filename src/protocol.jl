@@ -34,7 +34,7 @@ immutable TopicMetadata
 end
 
 immutable TopicMetadataRequest
-    # RequestHeader omitted, write manuallyheader::RequestHeader
+    # RequestHeader omitted, write manually header::RequestHeader
     topics::Vector{String}
 end
 
@@ -206,3 +206,17 @@ immutable OffsetResponse
     topic_data::Vector{OffsetResponseTopicData}
 end
 
+# API versions
+
+immutable ApiVersion
+    api_key::Int16
+    min_version::Int16
+    max_version::Int16
+end
+
+
+immutable ApiVersionsResponse
+    error_code::Int16
+    api_versions::Vector{ApiVersion}
+    throttle_time_ms::Int32
+end
