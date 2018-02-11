@@ -71,7 +71,7 @@ immutable Message_v1
     key::Vector{UInt8}
     value::Vector{UInt8}
 end
-typealias Message Message_v0
+const Message = Message_v0
 
 immutable OffsetMessage
     offset::Int64
@@ -122,7 +122,7 @@ immutable ProduceResponse_v2 # (supported in 0.10.0 or later)
     responses::Vector{Tuple{String, Vector{Tuple{Int32,Int16,Int64,Int64}}}}
     throttle_time::Int32
 end
-typealias ProduceResponse ProduceResponse_v0
+const ProduceResponse = ProduceResponse_v0
 
 # fetch
 
@@ -169,7 +169,7 @@ immutable FetchResponse_v1
     topic_results::Vector{FetchResponseTopicData}    
 end
 
-typealias FetchResponse FetchResponse_v0
+const FetchResponse = FetchResponse_v0
 
 
 # offset listing
