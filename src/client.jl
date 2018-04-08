@@ -1,4 +1,7 @@
 
+abstract type AbstractKafkaClient end
+
+
 """
 Asynchronous client for Kafka brokers.
 Workflow:
@@ -11,7 +14,7 @@ Workflow:
     resp = take!(channel)
 
 """
-type KafkaClient
+mutable struct KafkaClient <: AbstractKafkaClient
     brokers::Dict{Int, TCPSocket}
     meta::Dict{Symbol, Any}
     last_cor_id::Int64
@@ -29,9 +32,9 @@ function KafkaClient(host::AbstractString, port::Int; resp_loop=true)
     if resp_loop
         sockets = collect(values(brokers))
         for sock in sockets
-            @async begin                
+            @async begin
                 while isopen(sock)
-                    Base.start_reading(sock)                    
+                    Base.start_reading(sock)
                     while nb_available(sock) == 0 sleep(0.1) end
                     handle_response(kc, sock)
                 end
@@ -57,25 +60,25 @@ function register_request{T}(kc::KafkaClient, ::Type{T})
 end
 
 
-function find_leader_id(kc::KafkaClient, topic::AbstractString, partition::Integer)
+function find_leader_id(kc::AbstractKafkaClient, topic::AbstractString, partition::Integer)
     node_id = kc.meta[:topics][topic][partition][:leader]
     return node_id
 end
 
-function find_leader(kc::KafkaClient, topic::AbstractString, partition::Integer)
+function find_leader(kc::AbstractKafkaClient, topic::AbstractString, partition::Integer)
     node_id = kc.meta[:topics][topic][partition][:leader]
     return kc.brokers[node_id]
 end
 
 
-function random_broker(kc::KafkaClient)
+function random_broker(kc::AbstractKafkaClient)
     sockets = collect(values(kc.brokers))
     return sockets[rand(1:length(sockets))]
 end
 
 
 function handle_response(kc::KafkaClient, sock::TCPSocket)
-    header = recv_header(sock)    
+    header = recv_header(sock)
     cor_id = header.correlation_id
     T = kc.inprogress[cor_id]
     resp = readobj(sock, T)
@@ -90,7 +93,7 @@ end
 Ensure that KafkaClient has open connection to the leader for these
 topic and partition. Reconnect if previous socket has been closed
 """
-function ensure_leader(kc::KafkaClient, topic::AbstractString, partition::Integer)
+function ensure_leader(kc::AbstractKafkaClient, topic::AbstractString, partition::Integer)
     node_id = find_leader_id(kc, topic, partition)
     if !isopen(kc.brokers[node_id])
         idx = find(b -> b.node_id == node_id, kc.meta[:brokers])[1]

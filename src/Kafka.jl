@@ -2,6 +2,7 @@ module Kafka
 
 export
     KafkaClient,
+    KClient,
     metadata,
     produce,
     fetch,
