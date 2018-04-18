@@ -1,3 +1,5 @@
+## client requests
+
 
 ## metadata
 
@@ -11,7 +13,7 @@ function init_metadata(sock::TCPSocket)
 end
 
 function _metadata{S<:AbstractString}(kc::KafkaClient, topics::Vector{S})
-    cor_id, ch = register_request(kc, TopicMetadataResponse)
+    cor_id = register_request(kc, TopicMetadataResponse)
     header = RequestHeader(METADATA, 0, cor_id, DEFAULT_ID)
     req = TopicMetadataRequest(topics)
     send_request(random_broker(kc), header, req)
@@ -24,7 +26,7 @@ function metadata{S<:AbstractString}(kc::KafkaClient, topics::Vector{S})
 end
 
 function _metadata(kc::KafkaClient)
-    cor_id, ch = register_request(kc, TopicMetadataResponse)
+    cor_id = register_request(kc, TopicMetadataResponse)
     header = RequestHeader(METADATA, 0, cor_id, DEFAULT_ID)
     req = AllTopicsMetadataRequest()
     send_request(random_broker(kc), header, req)
@@ -100,7 +102,7 @@ end
 function _produce(kc::KafkaClient, topic::AbstractString, partition::Integer,
                   kvs::Vector{Tuple{Vector{UInt8}, Vector{UInt8}}})
     pid = Int32(partition)
-    cor_id, ch = register_request(kc, ProduceResponse)
+    cor_id = register_request(kc, ProduceResponse)
     header = RequestHeader(PRODUCE, 0, cor_id, DEFAULT_ID)
     req = make_produce_request(topic, pid, kvs)
     send_request(find_leader(kc, topic, pid), header, req)
@@ -138,7 +140,7 @@ function _fetch(kc::KafkaClient, topic::AbstractString,
                 prt_id::Integer, offset::Int64;
                 max_wait_time=100, min_bytes=1024, max_bytes=1024*1024)
     partition = Int32(prt_id)
-    cor_id, ch = register_request(kc, FetchResponse)
+    cor_id = register_request(kc, FetchResponse)
     header = RequestHeader(FETCH, 0, cor_id, DEFAULT_ID)
     req = make_fetch_request(topic, partition, offset,
                              max_wait_time, min_bytes, max_bytes)
@@ -186,41 +188,16 @@ function make_offset_request(replica_id::Int32,
 end
 
 
-function _list_offsets(kc::KafkaClient, topic::AbstractString, partition::Integer,
-                       time::Int64, max_number_of_offsets::Int64)
+function list_offsets(kc::KafkaClient, topic::AbstractString, partition::Integer,
+                      time::Int64, max_number_of_offsets::Int64)
     pid = Int32(partition)
-    cor_id, ch = register_request(kc, OffsetResponse)
+    cor_id = register_request(kc, OffsetResponse)
     header = RequestHeader(OFFSETS, 0, cor_id, DEFAULT_ID)
     req = make_offset_request(find_leader_id(kc, topic, partition),
                               topic, pid, time, max_number_of_offsets)
-    send_request(find_leader(kc, topic, partition), header, req)
-    return ch
-end
-
-
-function list_offsets(kc::KafkaClient, topic::AbstractString, partition::Integer,
-                      time::Int64, max_number_of_offsets::Int64)
-    ensure_leader(kc, topic, partition)
-    ch = _list_offsets(kc, topic, partition, time, max_number_of_offsets)
-    return map(process_response, ch)
-end
-
-
-function earliest_offset(kc::KafkaClient,
-                         topic::AbstractString, partition::Integer)
-    ch = list_offsets(kc, topic, partition, -2, 1)
-    return map(offsets -> offsets[1], ch)
-end
-
-
-function latest_offset(kc::KafkaClient,
-                       topic::AbstractString, partition::Integer)
-    ch = list_offsets(kc, topic, partition, -1, 1)
-    return map(offsets -> offsets[1], ch)
-end
-
-
-function process_response(resp::OffsetResponse)
+    node_id, sock = find_leader(kc, topic, partition)
+    send_request(sock, header, req)
+    resp = take!(kc.out_channels[node_id])
     pd = resp.topic_data[1].partition_data[1]
     if pd.error_code != 0
         error("OffsetRequest failed with error code: $(pd.error_code)")
@@ -229,13 +206,27 @@ function process_response(resp::OffsetResponse)
 end
 
 
+function earliest_offset(kc::KafkaClient,
+                         topic::AbstractString, partition::Integer)
+    offsets =  list_offsets(kc, topic, partition, -2, 1)
+    return offsets[1]
+end
+
+
+function latest_offset(kc::KafkaClient,
+                       topic::AbstractString, partition::Integer)
+    offsets = list_offsets(kc, topic, partition, -1, 1)
+    return return offsets[1]
+end
+
+
 ## API versions
 
 function api_versions(kc::KafkaClient)
-    sock = random_broker(kc)
-    cor_id, ch = register_request(kc, ApiVersionsResponse)
+    node_id, sock = random_broker(kc)
+    cor_id = register_request(kc, ApiVersionsResponse)
     header = RequestHeader(API_VERSIONS, 1, cor_id, DEFAULT_ID)
     send_request(sock, header)
-    resp = take!(ch)
+    resp = take!(kc.out_channels[node_id])
     return resp.api_versions
 end
