@@ -16,6 +16,7 @@ seek(io, 0)
 @test readobj(io, Vector{UInt8}) == UInt8[1, 2, 3]
 @test readobj(io, Vector{String}) == ["hello", "world"]
 
+# integration tests require Kafka broker running on 127.0.0.1:9092
 include("integration.jl")
 
 println("Ok.")

@@ -47,8 +47,7 @@ function start_recv_task(kc, node_id)
             # put result into out channel for this broker
             put!(kc.out_channels[node_id], resp)
             # delete mapping for this cor_id
-            delete!(kc.msg_types, cor_id)
-            println("read offsets in: $node_id")
+            delete!(kc.msg_types, cor_id)           
         catch e
             if e isa EOFError
                 # ignore
@@ -119,4 +118,15 @@ function ensure_leader(kc::AbstractKafkaClient, topic::AbstractString, partition
         port = kc.meta[:brokers][idx].port
         kc.brokers[node_id] = connect(host, port)
     end
+end
+
+
+function send_and_read(kc::KafkaClient, topic::AbstractString, pid::Integer, header, req)
+    """
+    Helper function to send request to a leader and read response from corresponding channel
+    """
+    node_id, sock = find_leader(kc, topic, pid)
+    send_request(sock, header, req)
+    resp = take!(kc.out_channels[node_id])
+    return resp
 end

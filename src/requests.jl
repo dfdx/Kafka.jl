@@ -1,6 +1,5 @@
 ## client requests
 
-
 ## metadata
 
 function init_metadata(sock::TCPSocket)
@@ -9,34 +8,46 @@ function init_metadata(sock::TCPSocket)
     send_request(sock, header, req)
     header = recv_header(sock)
     resp = readobj(sock, TopicMetadataResponse)
-    return process_response(resp)
+    if !isempty(resp.topic_metadata)
+        topic_metadata_dict = merge(map(parse_metadata, resp.topic_metadata)...)
+    else
+        topic_metadata_dict = Dict{Symbol,Any}()
+    end
+    return Dict(:brokers => resp.brokers, :topics => topic_metadata_dict)
 end
 
-function _metadata{S<:AbstractString}(kc::KafkaClient, topics::Vector{S})
+
+function metadata{S<:AbstractString}(kc::KafkaClient, topics::Vector{S})
     cor_id = register_request(kc, TopicMetadataResponse)
     header = RequestHeader(METADATA, 0, cor_id, DEFAULT_ID)
     req = TopicMetadataRequest(topics)
-    send_request(random_broker(kc), header, req)
-    return ch
+    node_id, sock = random_broker(kc)
+    send_request(sock, header, req)
+    resp = take!(kc.out_channels[node_id])
+    if !isempty(resp.topic_metadata)
+        topic_metadata_dict = merge(map(parse_metadata, resp.topic_metadata)...)
+    else
+        topic_metadata_dict = Dict{Symbol,Any}()
+    end
+    return Dict(:brokers => resp.brokers, :topics => topic_metadata_dict)
 end
 
-function metadata{S<:AbstractString}(kc::KafkaClient, topics::Vector{S})
-    ch = _metadata(kc, topics)
-    return map(process_response, ch)
-end
 
-function _metadata(kc::KafkaClient)
+function metadata(kc::KafkaClient)
     cor_id = register_request(kc, TopicMetadataResponse)
     header = RequestHeader(METADATA, 0, cor_id, DEFAULT_ID)
     req = AllTopicsMetadataRequest()
-    send_request(random_broker(kc), header, req)
-    return ch
+    node_id, sock = random_broker(kc)
+    send_request(sock, header, req)
+    resp = take!(kc.out_channels[node_id])
+    if !isempty(resp.topic_metadata)
+        topic_metadata_dict = merge(map(parse_metadata, resp.topic_metadata)...)
+    else
+        topic_metadata_dict = Dict{Symbol,Any}()
+    end
+    return Dict(:brokers => resp.brokers, :topics => topic_metadata_dict)
 end
 
-function metadata(kc::KafkaClient)
-    ch = _metadata(kc)
-    return map(process_response, ch)
-end
 
 function parse_metadata(md::PartitionMetadata)
     if md.partition_error_code != 0
@@ -55,15 +66,6 @@ function parse_metadata(md::TopicMetadata)
     end
     partition_metadata_dict = merge(map(parse_metadata, md.partition_metadata)...)
     return Dict(md.topic_name => partition_metadata_dict)
-end
-
-function process_response(resp::TopicMetadataResponse)
-    if !isempty(resp.topic_metadata)
-        topic_metadata_dict = merge(map(parse_metadata, resp.topic_metadata)...)
-    else
-        topic_metadata_dict = Dict{Symbol,Any}()
-    end
-    return Dict(:brokers => resp.brokers, :topics => topic_metadata_dict)
 end
 
 
@@ -99,29 +101,18 @@ function make_produce_request(topic::AbstractString, partition_id::Integer,
     return req
 end
 
-function _produce(kc::KafkaClient, topic::AbstractString, partition::Integer,
-                  kvs::Vector{Tuple{Vector{UInt8}, Vector{UInt8}}})
+function produce(kc::KafkaClient, topic::AbstractString, partition::Integer,
+                 kvs::Vector{Tuple{Vector{UInt8}, Vector{UInt8}}})
+    ensure_leader(kc, topic, partition)
     pid = Int32(partition)
     cor_id = register_request(kc, ProduceResponse)
     header = RequestHeader(PRODUCE, 0, cor_id, DEFAULT_ID)
     req = make_produce_request(topic, pid, kvs)
-    send_request(find_leader(kc, topic, pid), header, req)
-    return ch
-end
-
-function produce(kc::KafkaClient, topic::AbstractString, partition::Integer,
-                 kvs::Vector{Tuple{Vector{UInt8}, Vector{UInt8}}})
-    ensure_leader(kc, topic, partition)
-    ch = _produce(kc, topic, partition, kvs)
-    return map(process_response, ch)
-end
-
-function process_response(resp::ProduceResponse)
+    resp = send_and_read(kc, topic, pid, header, req)
     partition, error_code, offset = resp.responses[1][2][1]
-    if error_code != 0
-        error("ProduceRequest failed with error code: $error_code")
-    end
+    error_code != 0 && error("ProduceRequest failed with error code: $error_code")
     return offset
+    # return ch
 end
 
 
@@ -136,42 +127,23 @@ function make_fetch_request(topic::AbstractString, prt_id::Integer, offset::Int6
     return req
 end
 
-function _fetch(kc::KafkaClient, topic::AbstractString,
-                prt_id::Integer, offset::Int64;
-                max_wait_time=100, min_bytes=1024, max_bytes=1024*1024)
+function fetch(kc::KafkaClient, topic::AbstractString,
+               prt_id::Integer, offset::Int64;
+               max_wait_time=100, min_bytes=1024, max_bytes=1024*1024)    
     partition = Int32(prt_id)
+    ensure_leader(kc, topic, partition)
     cor_id = register_request(kc, FetchResponse)
     header = RequestHeader(FETCH, 0, cor_id, DEFAULT_ID)
     req = make_fetch_request(topic, partition, offset,
                              max_wait_time, min_bytes, max_bytes)
-    send_request(find_leader(kc, topic, partition), header, req)
-    return ch
-end
-
-function fetch(kc::KafkaClient, topic::AbstractString,
-               partition::Integer, offset::Int64;
-               max_wait_time=100, min_bytes=1024, max_bytes=1024*1024,
-               key_type=Vector{UInt8}, value_type=Vector{UInt8})
-    ensure_leader(kc, topic, partition)
-    ch = _fetch(kc, topic, partition, offset; max_wait_time=max_wait_time,
-                min_bytes=min_bytes, max_bytes=max_bytes)
-    return map(r -> process_response(r, key_type, value_type), ch)
-end
-
-function process_response(resp::FetchResponse)
+    # send_request(find_leader(kc, topic, partition), header, req)
+    resp = send_and_read(kc, topic, partition, header, req)
     pr = resp.topic_results[1].partition_results[1]
-    if pr.error_code != 0
-        error("FetchRequest failed with error code: $(pr.error_code)")
-    end
+    pr.error_code != 0 && error("FetchRequest failed with error code: $(pr.error_code)")
     elements = pr.message_set.elements
     results = [(elem.offset, elem.message.key, elem.message.value)
                for elem in elements]
     return results
-end
-
-function process_response{K,V}(resp::FetchResponse, ::Type{K}, ::Type{V})
-    return [(offset, convert(K, key), convert(V, value))
-            for (offset, key, value) in process_response(resp)]
 end
 
 
