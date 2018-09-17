@@ -1,6 +1,5 @@
-
-import Base: fetch, produce, consume
-import Base: map, put!, push!, take!, isopen, close
+import Base: fetch, map, put!, push!, take!, isopen, close
+using Sockets
 
 include("constants.jl")
 include("crc32.jl")
