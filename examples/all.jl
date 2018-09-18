@@ -32,8 +32,8 @@ take!(list_offsets(kc, "test", 0, now, max_number_of_offsets))
 
 # produce new messages
 # each message is a key-value pair where both key and value are byte arrays
-keys = [convert(Vector{UInt8}, key) for key in ["1", "2", "3"]]
-values = [convert(Vector{UInt8}, value) for value in ["feel", "good", "inc."]]
+keys = [unsafe_wrap(Vector{UInt8}, key) for key in ["1", "2", "3"]]
+values = [unsafe_wrap(Vector{UInt8}, value) for value in ["feel", "good", "inc."]]
 messages = collect(zip(keys, values))
 # messages are produced to a specific topic (e.g. "test") and partition (e.g. 0)
 # take!(produce(...)) returns an offset of the first message

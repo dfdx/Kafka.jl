@@ -32,7 +32,7 @@ function KafkaClient(host::AbstractString, port::Int; resp_loop=true)
             @async begin                
                 while isopen(sock)
                     Base.start_reading(sock)                    
-                    while nb_available(sock) == 0 sleep(0.1) end
+                    while bytesavailable(sock) == 0 sleep(0.1) end
                     handle_response(kc, sock)
                 end
             end

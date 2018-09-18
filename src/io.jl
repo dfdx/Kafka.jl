@@ -26,7 +26,7 @@ function readobj(io::IO, ::Type{Vector{T}}) where T
     if len <= 0
         return T[]
     end
-    arr = Array{T}(len)
+    arr = Array{T}(undef, len)
     for i=1:len
         arr[i] = readobj(io, T)
     end
@@ -65,12 +65,12 @@ end
 
 # composite types
 function writeobj(io::IO, o)
-    for f in fieldnames(o)
+    for f in fieldnames(typeof(o))
         writeobj(io, getfield(o, f))
     end
 end
 function readobj(io::IO, ::Type{T}) where T
-    vals = Array{Any}(length(T.types))
+    vals = Array{Any}(undef, length(T.types))
     for (i, t) in enumerate(T.types)
         vals[i] = readobj(io, t)
     end
