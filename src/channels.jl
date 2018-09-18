@@ -1,6 +1,6 @@
 
-type TransformedChannel <: AbstractChannel
-    original::AbstractChannel
+mutable struct TransformedChannel{T} <: AbstractChannel{T}
+    original::AbstractChannel{T}
     transform::Function
 end
 

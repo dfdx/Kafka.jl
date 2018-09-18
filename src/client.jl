@@ -11,7 +11,7 @@ Workflow:
     resp = take!(channel)
 
 """
-type KafkaClient
+mutable struct KafkaClient
     brokers::Dict{Int, TCPSocket}
     meta::Dict{Symbol, Any}
     last_cor_id::Int64
@@ -32,7 +32,7 @@ function KafkaClient(host::AbstractString, port::Int; resp_loop=true)
             @async begin                
                 while isopen(sock)
                     Base.start_reading(sock)                    
-                    while nb_available(sock) == 0 sleep(0.1) end
+                    while bytesavailable(sock) == 0 sleep(0.1) end
                     handle_response(kc, sock)
                 end
             end
@@ -48,7 +48,7 @@ function Base.show(io::IO, kc::KafkaClient)
 end
 
 
-function register_request{T}(kc::KafkaClient, ::Type{T})
+function register_request(kc::KafkaClient, ::Type{T}) where T
     kc.last_cor_id += 1
     id = kc.last_cor_id
     kc.inprogress[id] = T

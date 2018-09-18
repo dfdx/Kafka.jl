@@ -2,24 +2,24 @@
 # Kafka wire protocol. See details at:
 # https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-Messagesets
 
-immutable RequestHeader
+struct RequestHeader
     api_key::Int16
     api_version::Int16
     correlation_id::Int32
     client_id::String
 end
 
-immutable ResponseHeader
+struct ResponseHeader
     correlation_id::Int32
 end
 
-immutable Broker
+struct Broker
     node_id::Int32
     host::String
     port::Int32
 end
 
-immutable PartitionMetadata
+struct PartitionMetadata
     partition_error_code::Int16
     partition_id::Int32
     leader::Int32
@@ -27,13 +27,13 @@ immutable PartitionMetadata
     isr::Vector{Int32}
 end
 
-immutable TopicMetadata
+struct TopicMetadata
     topic_error_code::Int16
     topic_name::String
     partition_metadata::Vector{PartitionMetadata}
 end
 
-immutable TopicMetadataRequest
+struct TopicMetadataRequest
     # RequestHeader omitted, write manually header::RequestHeader
     topics::Vector{String}
 end
@@ -43,27 +43,27 @@ end
 # transforms Julia's T[] to null (i.e. array with lenght -1)
 # to overcome it in this specific case we use special request that 
 # emulates empty array (with length 0)
-immutable AllTopicsMetadataRequest
+struct AllTopicsMetadataRequest
     # RequestHeader omitted, write manuallyheader::RequestHeader
     pseudo_length::Int32
     AllTopicsMetadataRequest() = new(0)
 end
 
-immutable TopicMetadataResponse
+struct TopicMetadataResponse
     # ResponseHeader omitted, read manually
     brokers::Vector{Broker}
     topic_metadata::Vector{TopicMetadata}
 end
 
 
-immutable Message_v0
+struct Message_v0
     crc::Int32
     magic_byte::Int8
     attributes::Int8
     key::Vector{UInt8}
     value::Vector{UInt8}
 end
-immutable Message_v1
+struct Message_v1
     crc::Int32
     magic_byte::Int8
     attributes::Int8
@@ -73,7 +73,7 @@ immutable Message_v1
 end
 const Message = Message_v0
 
-immutable OffsetMessage
+struct OffsetMessage
     offset::Int64
     message_size::Int32
     message::Message
@@ -81,43 +81,43 @@ end
 
 # NOTE: MessageSet is serialized differently than other types,
 # see io.jl for details
-immutable MessageSet
+struct MessageSet
     elements::Vector{OffsetMessage}
 end
 
 
 # produce
 
-immutable ProduceRequestPartitionData
+struct ProduceRequestPartitionData
     partition::Int32
     message_set_size::Int32
     message_set::MessageSet
 end
 
-immutable ProduceRequestTopicData
+struct ProduceRequestTopicData
     topic_name::String
     partition_data::Vector{ProduceRequestPartitionData}
 end
 
 
-immutable ProduceRequest
+struct ProduceRequest
     # RequestHeader omitted, write manually
     required_acks::Int16
     timeout::Int32
     topic_data::Vector{ProduceRequestTopicData}
 end
 
-immutable ProduceResponse_v0
+struct ProduceResponse_v0
     # ResponseHeader omitted, read it manually
     # responses format: [TopicName [Partition ErrorCode Offset]]
     responses::Vector{Tuple{String, Vector{Tuple{Int32,Int16,Int64}}}}
 end
-immutable ProduceResponse_v1 # (supported in 0.9.0 or later)
+struct ProduceResponse_v1 # (supported in 0.9.0 or later)
     # ResponseHeader omitted, read it manually
     responses::Vector{Tuple{String, Vector{Tuple{Int32,Int16,Int64}}}}
     throttle_time::Int32
 end
-immutable ProduceResponse_v2 # (supported in 0.10.0 or later)
+struct ProduceResponse_v2 # (supported in 0.10.0 or later)
     # ResponseHeader omitted, read it manually
     responses::Vector{Tuple{String, Vector{Tuple{Int32,Int16,Int64,Int64}}}}
     throttle_time::Int32
@@ -126,18 +126,18 @@ const ProduceResponse = ProduceResponse_v0
 
 # fetch
 
-immutable FetchRequestPartitionData
+struct FetchRequestPartitionData
     partition::Int32
     offset::Int64
     max_bytes::Int32
 end
 
-immutable FetchRequestTopicData
+struct FetchRequestTopicData
     topic_name::String
     partition_fetches::Vector{FetchRequestPartitionData}
 end
 
-immutable FetchRequest
+struct FetchRequest
     # RequestHeader omitted, write it manually
     replica_id::Int32 # should always be -1 for clients
     max_wait_time::Int32
@@ -145,7 +145,7 @@ immutable FetchRequest
     topic_fetches::Vector{FetchRequestTopicData}
 end
 
-immutable FetchResponsePartitionData
+struct FetchResponsePartitionData
     partition::Int32
     error_code::Int16
     highwater_mark_offset::Int64
@@ -153,17 +153,17 @@ immutable FetchResponsePartitionData
     message_set::MessageSet
 end
 
-immutable FetchResponseTopicData
+struct FetchResponseTopicData
     topic_name::String
     partition_results::Vector{FetchResponsePartitionData}
 end
 
-immutable FetchResponse_v0
+struct FetchResponse_v0
     # ResponseHeader omitted, read it manually
     topic_results::Vector{FetchResponseTopicData}
 end
 
-immutable FetchResponse_v1
+struct FetchResponse_v1
     # ResponseHeader omitted, read it manually
     throttle_time::Int32
     topic_results::Vector{FetchResponseTopicData}    
@@ -174,48 +174,48 @@ const FetchResponse = FetchResponse_v0
 
 # offset listing
 
-immutable OffsetRequestPartitionData
+struct OffsetRequestPartitionData
     partition::Int32
     time::Int64
     max_number_of_offsets::Int32
 end
 
-immutable OffsetRequestTopicData
+struct OffsetRequestTopicData
     topic_name::String
     partition_data::Vector{OffsetRequestPartitionData}
 end
 
-immutable OffsetRequest
+struct OffsetRequest
     replica_id::Int32
     topic_data::Vector{OffsetRequestTopicData}    
 end
 
 
-immutable OffsetResponsePartitionData
+struct OffsetResponsePartitionData
     partition::Int32
     error_code::Int16
     offsets::Vector{Int64}
 end
 
-immutable OffsetResponseTopicData
+struct OffsetResponseTopicData
     topic_name::String
     partition_data::Vector{OffsetResponsePartitionData}
 end
 
-immutable OffsetResponse
+struct OffsetResponse
     topic_data::Vector{OffsetResponseTopicData}
 end
 
 # API versions
 
-immutable ApiVersion
+struct ApiVersion
     api_key::Int16
     min_version::Int16
     max_version::Int16
 end
 
 
-immutable ApiVersionsResponse
+struct ApiVersionsResponse
     error_code::Int16
     api_versions::Vector{ApiVersion}
     throttle_time_ms::Int32

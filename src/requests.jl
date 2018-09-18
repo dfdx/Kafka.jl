@@ -10,7 +10,7 @@ function init_metadata(sock::TCPSocket)
     return process_response(resp)
 end
 
-function _metadata{S<:AbstractString}(kc::KafkaClient, topics::Vector{S})
+function _metadata(kc::KafkaClient, topics::Vector{S}) where S<:AbstractString
     cor_id, ch = register_request(kc, TopicMetadataResponse)
     header = RequestHeader(METADATA, 0, cor_id, DEFAULT_ID)
     req = TopicMetadataRequest(topics)
@@ -18,7 +18,7 @@ function _metadata{S<:AbstractString}(kc::KafkaClient, topics::Vector{S})
     return ch
 end
 
-function metadata{S<:AbstractString}(kc::KafkaClient, topics::Vector{S})
+function metadata(kc::KafkaClient, topics::Vector{S}) where {S<:AbstractString}
     ch = _metadata(kc, topics)
     return map(process_response, ch)
 end
@@ -167,7 +167,7 @@ function process_response(resp::FetchResponse)
     return results
 end
 
-function process_response{K,V}(resp::FetchResponse, ::Type{K}, ::Type{V})
+function process_response(resp::FetchResponse, ::Type{K}, ::Type{V}) where {K,V}
     return [(offset, convert(K, key), convert(V, value))
             for (offset, key, value) in process_response(resp)]
 end
