@@ -16,11 +16,16 @@ Basically, Kafka provides 4 principal APIs:
 
 First 4 are implemented and should be sufficient for most real-life use cases. The last one, however, is somewhat fast-moving target without single approach (e.g. Kafka 0.8.x uses Zookeeper to store offsets, 0.9.x provides broker API, while external systems like Apache Spark and Apache Storm use their own means to store offsets). Given instability and variety of options this part is postponed for now. Though, proposals and discussions are heavily welcome.
 
+## Installation
+```julia
+(v1.0) pkg> add Kafka#master
+```
+
 ## Usage example
 
 Here's short version of what you can do with Kafka.jl. For full example see `examples/all.jl`.
 
-```
+```julia
 using Kafka
 
 # create KafkaClient using single bootstrap broker
