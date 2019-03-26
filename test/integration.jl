@@ -19,8 +19,8 @@ take!(earliest_offset(kc, "test", 0))
 take!(latest_offset(kc, "test", 0))
 
 # produce new messages
-keys = [convert(Vector{UInt8}, key) for key in ["1", "2", "3"]]
-values = [convert(Vector{UInt8}, value) for value in ["feel", "good", "inc."]]
+keys = [unsafe_wrap(Vector{UInt8}, key) for key in ["1", "2", "3"]]
+values = [unsafe_wrap(Vector{UInt8}, value) for value in ["feel", "good", "inc."]]
 messages = collect(zip(keys, values))
 offset = take!(produce(kc, "test", 0, messages))
 
