@@ -4,6 +4,8 @@
 
 Client for Apache Kafka in Julia
 
+This project is **DISCONTINUED**. Please use [RDKafka.jl](https://github.com/dfdx/RDKafka.jl) instead.
+
 ## Status
 
 Basically, Kafka provides 4 principal APIs:
