@@ -1,6 +1,6 @@
 using Kafka
 import Kafka: writeobj, readobj
-using Base.Test
+using Test
 
 io = IOBuffer()
 
